@@ -1,4 +1,4 @@
-module github.com/hnakamur/go-scp
+module github.com/sjatsh/go-scp
 
 go 1.15
 
