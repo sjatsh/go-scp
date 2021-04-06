@@ -299,6 +299,8 @@ func (s *sinkProtocol) ReadHeaderOrReply() (interface{}, error) {
 
 func (s *sinkProtocol) CopyFileBodyTo(h fileMsgHeader, w io.Writer) error {
 	bar := pb.StartNew(int(h.Size))
+	bar.SetWidth(64)
+	bar.SetUnits(pb.U_BYTES_DEC)
 	// create proxy reader
 	barReader := bar.NewProxyReader(io.LimitReader(s.remReader, h.Size))
 	n, err := io.Copy(w, barReader)
