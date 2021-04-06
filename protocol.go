@@ -81,11 +81,19 @@ func toSecondsAndMicroseconds(t time.Time) (seconds int64, microseconds int) {
 }
 
 func (s *sourceProtocol) writeFile(mode os.FileMode, length int64, filename string, body io.ReadCloser) error {
+	bar := pb.StartNew(int(length))
+	bar.SetWidth(64)
+	bar.SetUnits(pb.U_BYTES_DEC)
+	// create proxy reader
+	barReader := bar.NewProxyReader(io.LimitReader(body, length))
+
 	_, err := fmt.Fprintf(s.remIn, "%c%#4o %d %s\n", msgCopyFile, mode&os.ModePerm, length, filepath.Base(filename))
 	if err != nil {
 		return fmt.Errorf("failed to write scp file header: err=%s", err)
 	}
-	_, err = io.Copy(s.remIn, body)
+	_, err = io.Copy(s.remIn, barReader)
+	bar.Finish()
+
 	// NOTE: We close body whether or not copy fails and ignore an error from closing body.
 	body.Close()
 	if err != nil {
