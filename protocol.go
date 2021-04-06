@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/cheggaaa/pb"
 )
 
 const (
@@ -296,8 +298,11 @@ func (s *sinkProtocol) ReadHeaderOrReply() (interface{}, error) {
 }
 
 func (s *sinkProtocol) CopyFileBodyTo(h fileMsgHeader, w io.Writer) error {
-	lr := io.LimitReader(s.remReader, h.Size)
-	n, err := io.Copy(w, lr)
+	bar := pb.StartNew(int(h.Size))
+	// create proxy reader
+	barReader := bar.NewProxyReader(io.LimitReader(s.remReader, h.Size))
+	n, err := io.Copy(w, barReader)
+	bar.Finish()
 	if err == io.EOF {
 		if n != h.Size {
 			return fmt.Errorf("unexpected EOF in CopyFileBodyTo: err=%s", err)
