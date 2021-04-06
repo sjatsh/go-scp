@@ -82,7 +82,6 @@ func toSecondsAndMicroseconds(t time.Time) (seconds int64, microseconds int) {
 
 func (s *sourceProtocol) writeFile(mode os.FileMode, length int64, filename string, body io.ReadCloser) error {
 	bar := pb.StartNew(int(length))
-	bar.SetWidth(64)
 	bar.SetUnits(pb.U_BYTES_DEC)
 	// create proxy reader
 	barReader := bar.NewProxyReader(io.LimitReader(body, length))
@@ -307,7 +306,6 @@ func (s *sinkProtocol) ReadHeaderOrReply() (interface{}, error) {
 
 func (s *sinkProtocol) CopyFileBodyTo(h fileMsgHeader, w io.Writer) error {
 	bar := pb.StartNew(int(h.Size))
-	bar.SetWidth(64)
 	bar.SetUnits(pb.U_BYTES_DEC)
 	// create proxy reader
 	barReader := bar.NewProxyReader(io.LimitReader(s.remReader, h.Size))
