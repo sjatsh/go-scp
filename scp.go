@@ -8,6 +8,8 @@ type SCP struct {
 	// Alternate scp command. If not set, scp is used. This can be used
 	// to call scp via sudo by setting it to "sudo scp"
 	SCPCommand string
+	// The console prints download or upload progress
+	ShowSchedule bool
 }
 
 // NewSCP creates the SCP client.

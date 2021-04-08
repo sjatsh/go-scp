@@ -26,9 +26,10 @@ const (
 )
 
 type sourceProtocol struct {
-	remIn     io.WriteCloser
-	remOut    io.Reader
-	remReader *bufio.Reader
+	ShowSchedule bool
+	remIn        io.WriteCloser
+	remOut       io.Reader
+	remReader    *bufio.Reader
 }
 
 func newSourceProtocol(remIn io.WriteCloser, remOut io.Reader) (*sourceProtocol, error) {
@@ -81,17 +82,25 @@ func toSecondsAndMicroseconds(t time.Time) (seconds int64, microseconds int) {
 }
 
 func (s *sourceProtocol) writeFile(mode os.FileMode, length int64, filename string, body io.ReadCloser) error {
-	bar := pb.StartNew(int(length))
-	bar.SetUnits(pb.U_BYTES_DEC)
-	// create proxy reader
-	barReader := bar.NewProxyReader(io.LimitReader(body, length))
-
-	_, err := fmt.Fprintf(s.remIn, "%c%#4o %d %s\n", msgCopyFile, mode&os.ModePerm, length, filepath.Base(filename))
-	if err != nil {
-		return fmt.Errorf("failed to write scp file header: err=%s", err)
+	var err error
+	if s.ShowSchedule {
+		bar := pb.StartNew(int(length))
+		bar.SetUnits(pb.U_BYTES_DEC)
+		barReader := bar.NewProxyReader(io.LimitReader(body, length))
+		_, err := fmt.Fprintf(s.remIn, "%c%#4o %d %s\n", msgCopyFile, mode&os.ModePerm, length, filepath.Base(filename))
+		if err != nil {
+			return fmt.Errorf("failed to write scp file header: err=%s", err)
+		}
+		_, err = io.Copy(s.remIn, barReader)
+		bar.Finish()
+	} else {
+		reader := io.LimitReader(body, length)
+		_, err := fmt.Fprintf(s.remIn, "%c%#4o %d %s\n", msgCopyFile, mode&os.ModePerm, length, filepath.Base(filename))
+		if err != nil {
+			return fmt.Errorf("failed to write scp file header: err=%s", err)
+		}
+		_, err = io.Copy(s.remIn, reader)
 	}
-	_, err = io.Copy(s.remIn, barReader)
-	bar.Finish()
 
 	// NOTE: We close body whether or not copy fails and ignore an error from closing body.
 	body.Close()
@@ -150,9 +159,10 @@ func (s *sourceProtocol) readReply() error {
 }
 
 type sinkProtocol struct {
-	remIn     io.WriteCloser
-	remOut    io.Reader
-	remReader *bufio.Reader
+	ShowSchedule bool
+	remIn        io.WriteCloser
+	remOut       io.Reader
+	remReader    *bufio.Reader
 }
 
 func newSinkProtocol(remIn io.WriteCloser, remOut io.Reader) (*sinkProtocol, error) {
@@ -305,12 +315,19 @@ func (s *sinkProtocol) ReadHeaderOrReply() (interface{}, error) {
 }
 
 func (s *sinkProtocol) CopyFileBodyTo(h fileMsgHeader, w io.Writer) error {
-	bar := pb.StartNew(int(h.Size))
-	bar.SetUnits(pb.U_BYTES_DEC)
-	// create proxy reader
-	barReader := bar.NewProxyReader(io.LimitReader(s.remReader, h.Size))
-	n, err := io.Copy(w, barReader)
-	bar.Finish()
+	var n int64
+	var err error
+	if s.ShowSchedule {
+		bar := pb.StartNew(int(h.Size))
+		bar.SetUnits(pb.U_BYTES_DEC)
+		// create proxy reader
+		reader := bar.NewProxyReader(io.LimitReader(s.remReader, h.Size))
+		n, err = io.Copy(w, reader)
+		bar.Finish()
+	} else {
+		reader := io.LimitReader(s.remReader, h.Size)
+		n, err = io.Copy(w, reader)
+	}
 	if err == io.EOF {
 		if n != h.Size {
 			return fmt.Errorf("unexpected EOF in CopyFileBodyTo: err=%s", err)

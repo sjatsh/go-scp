@@ -19,7 +19,7 @@ func (s *SCP) Send(info *FileInfo, r io.ReadCloser, destFile string) error {
 	destFile = filepath.Clean(destFile)
 	destFile = realPath(filepath.Dir(destFile))
 
-	return runSourceSession(s.client, destFile, false, s.SCPCommand, false, true, func(s *sourceSession) error {
+	return runSourceSession(s, destFile, false, s.SCPCommand, false, true, func(s *sourceSession) error {
 		err := s.WriteFile(info, r)
 		if err != nil {
 			return fmt.Errorf("failed to copy file: err=%s", err)
@@ -34,7 +34,7 @@ func (s *SCP) SendFile(srcFile, destFile string) error {
 	srcFile = filepath.Clean(srcFile)
 	destFile = realPath(filepath.Clean(destFile))
 
-	return runSourceSession(s.client, destFile, false, s.SCPCommand, false, true, func(s *sourceSession) error {
+	return runSourceSession(s, destFile, false, s.SCPCommand, false, true, func(s *sourceSession) error {
 		osFileInfo, err := os.Stat(srcFile)
 		if err != nil {
 			return fmt.Errorf("failed to stat source file: err=%s", err)
@@ -78,7 +78,7 @@ func (s *SCP) SendDir(srcDir, destDir string, acceptFn AcceptFunc) error {
 		acceptFn = acceptAny
 	}
 
-	return runSourceSession(s.client, destDir, false, s.SCPCommand, true, true, func(s *sourceSession) error {
+	return runSourceSession(s, destDir, false, s.SCPCommand, true, true, func(s *sourceSession) error {
 		prevDirSkipped := false
 
 		endDirectories := func(prevDir, dir string) error {
@@ -178,9 +178,9 @@ type sourceSession struct {
 	*sourceProtocol
 }
 
-func newSourceSession(client *ssh.Client, remoteDestPath string, remoteDestIsDir bool, scpPath string, recursive, updatesPermission bool) (*sourceSession, error) {
+func newSourceSession(client *SCP, remoteDestPath string, remoteDestIsDir bool, scpPath string, recursive, updatesPermission bool) (*sourceSession, error) {
 	s := &sourceSession{
-		client:            client,
+		client:            client.client,
 		remoteDestPath:    remoteDestPath,
 		remoteDestIsDir:   remoteDestIsDir,
 		scpPath:           scpPath,
@@ -226,6 +226,7 @@ func newSourceSession(client *ssh.Client, remoteDestPath string, remoteDestIsDir
 	}
 
 	s.sourceProtocol, err = newSourceProtocol(s.stdin, s.stdout)
+	s.sourceProtocol.ShowSchedule = client.ShowSchedule
 	return s, err
 }
 
@@ -250,7 +251,7 @@ func (s *sourceSession) CloseStdin() error {
 	return s.stdin.Close()
 }
 
-func runSourceSession(client *ssh.Client, remoteDestPath string, remoteDestIsDir bool, scpPath string, recursive, updatesPermission bool, handler func(s *sourceSession) error) error {
+func runSourceSession(client *SCP, remoteDestPath string, remoteDestIsDir bool, scpPath string, recursive, updatesPermission bool, handler func(s *sourceSession) error) error {
 	s, err := newSourceSession(client, remoteDestPath, remoteDestIsDir, scpPath, recursive, updatesPermission)
 	defer s.Close()
 	if err != nil {

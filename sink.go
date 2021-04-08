@@ -17,7 +17,7 @@ import (
 func (s *SCP) Receive(srcFile string, dest io.Writer) (*FileInfo, error) {
 	var info *FileInfo
 	srcFile = realPath(filepath.Clean(srcFile))
-	err := runSinkSession(s.client, srcFile, false, s.SCPCommand, false, true, func(s *sinkSession) error {
+	err := runSinkSession(s, srcFile, false, s.SCPCommand, false, true, func(s *sinkSession) error {
 		var timeHeader timeMsgHeader
 		// loop over headers until we get the file content
 		for {
@@ -141,7 +141,7 @@ func (s *SCP) ReceiveDir(srcDir, destDir string, acceptFn AcceptFunc) error {
 		acceptFn = acceptAny
 	}
 
-	return runSinkSession(s.client, srcDir, false, s.SCPCommand, true, true, func(s *sinkSession) error {
+	return runSinkSession(s, srcDir, false, s.SCPCommand, true, true, func(s *sinkSession) error {
 		curDir := destDir
 		var timeHeader timeMsgHeader
 		var timeHeaders []timeMsgHeader
@@ -271,9 +271,9 @@ type sinkSession struct {
 	*sinkProtocol
 }
 
-func newSinkSession(client *ssh.Client, remoteSrcPath string, remoteSrcIsDir bool, scpPath string, recursive, updatesPermission bool) (*sinkSession, error) {
+func newSinkSession(client *SCP, remoteSrcPath string, remoteSrcIsDir bool, scpPath string, recursive, updatesPermission bool) (*sinkSession, error) {
 	s := &sinkSession{
-		client:            client,
+		client:            client.client,
 		remoteSrcPath:     remoteSrcPath,
 		remoteSrcIsDir:    remoteSrcIsDir,
 		scpPath:           scpPath,
@@ -319,6 +319,7 @@ func newSinkSession(client *ssh.Client, remoteSrcPath string, remoteSrcIsDir boo
 	}
 
 	s.sinkProtocol, err = newSinkProtocol(s.stdin, s.stdout)
+	s.sinkProtocol.ShowSchedule = client.ShowSchedule
 	return s, err
 }
 
@@ -336,7 +337,7 @@ func (s *sinkSession) Wait() error {
 	return s.session.Wait()
 }
 
-func runSinkSession(client *ssh.Client, remoteSrcPath string, remoteSrcIsDir bool, scpPath string, recursive, updatesPermission bool, handler func(s *sinkSession) error) error {
+func runSinkSession(client *SCP, remoteSrcPath string, remoteSrcIsDir bool, scpPath string, recursive, updatesPermission bool, handler func(s *sinkSession) error) error {
 	s, err := newSinkSession(client, remoteSrcPath, remoteSrcIsDir, scpPath, recursive, updatesPermission)
 	defer s.Close()
 	if err != nil {
